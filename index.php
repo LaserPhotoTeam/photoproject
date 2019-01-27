@@ -34,8 +34,8 @@ $spotNumber = 0;
 
 if($socialID != "")
 {
-   $hQuery = mysql_query("SELECT * FROM pf_phototrain WHERE id='{$socialID}' AND status='1'", $db);
-   if($datarow = mysql_fetch_array($hQuery))
+   $hQuery = mysqli_query($db, "SELECT * FROM pf_phototrain WHERE social_id='{$socialID}' AND status='1'");
+   if($datarow = mysqli_fetch_array($hQuery))
    {
       $recordID = $datarow["id"];
       $userID1 = $datarow["user_id_1"];
@@ -296,13 +296,27 @@ footer.page-footer .footer-copyright
                </div>
             </div>
             <br>
+            <div id="status" style="color: #ffffff; margin-top: 10px;"></div>
          </center>
          </div>
          <div class="col-lg-3 col-xs-0"></div>
       </div>
    </div>
    
-   <div style="display:none;"><img src="photo_placeholders.jpg" id="photobg"></div>
+   <div style="display:none;">
+   <?php
+   if($spotNumber == 0) print '<img src="photo_placeholders.jpg" id="photobg">';
+   else
+   {
+      $imageLink = str_replace($HOMEPAGE_URL, "", $imageLink);
+      print "<img src='{$imageLink}' id='photobg'>";
+   }
+   ?>
+   </div>
+   
+   <form method='post' name='redirect' action='done.php'>
+   <input type='hidden' name='s' value='1'>
+   </form>
 
    <script src="assets/js/jquery.min.js" ></script>
    <script src="assets/js/popper.min.js"></script>
@@ -323,60 +337,42 @@ var imageCropped = new MarvinImage();
 var name;
 var reader;
 var form;
+var photoUploaded = 0;
 
 $('#fileUpload').change(function(event) {
 	name = event.target.files[0].name;
 	reader = new FileReader();
 	reader.readAsDataURL(event.target.files[0]);
-	
+
+    $("#status").html("Processing... Please wait.");
+
 	reader.onload = function() {
 		imageOriginal.load(reader.result, imageLoaded);
 	};
 });
 
 function imageLoaded()
-{
-    <?php
-    
-    if($spotNumber > 0)
-    {
-       print "imageDisplay.load('{$imageLink}', function(){ imageDisplay.draw(canvas); });";
-    }
-    else
-    {
-       /* print "reader = new FileReader();";
-	   print "reader.readAsDataURL('photo_placeholders.jpg');";
+{   
+	var img = document.getElementById('photobg');
+	var canvas2 = document.createElement('canvas');
+	canvas2.width = img.width;
+	canvas2.height = img.height;
+	canvas2.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
 
-       print "imageDisplay.load(reader.result, function(){ imageDisplay.draw(canvas); });";*/
-    ?>
+	imageDisplay.setDimension(img.width, img.height);
 
-var img = document.getElementById('photobg');
-var canvas2 = document.createElement('canvas');
-canvas2.width = img.width;
-canvas2.height = img.height;
-canvas2.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
+	var pix;
 
-imageDisplay.setDimension(img.width, img.height);
+	for(var x = 0; x < img.width; x++)
+	{
+   		for(var y = 0; y < img.height; y++)
+   		{
+      		pix = canvas2.getContext('2d').getImageData(x, y, 1, 1).data;
 
-var pix;
+      		imageDisplay.setIntColor(x, y, 255, pix[0], pix[1], pix[2]);
+   		}
+	}
 
-for(var x = 0; x < img.width; x++)
-{
-   for(var y = 0; y < img.height; y++)
-   {
-      pix = canvas2.getContext('2d').getImageData(x, y, 1, 1).data;
-
-      imageDisplay.setIntColor(x, y, 255, pix[0], pix[1], pix[2]);
-   }
-}
-
-// imageDisplay.draw(document.getElementById("canvas"));
-// imageDisplay.update();
-
-    <?php
-    }
-
-    ?>
 	imageProcessed = imageOriginal.clone();
 
 	processPhoto();
@@ -410,8 +406,6 @@ function processReset()
 
 function processPhoto()
 {
-   // var imgData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
-
    imageBlending = imageOriginal.clone();
 
    for(var x = 0; x < imageOriginal.getWidth(); x++)
@@ -570,8 +564,47 @@ function processPhoto()
       }
    }
 
+   photoUploaded = 1;
+
+   $("#status").html("Photo uploaded. Now publish it!");
+
    repaint();
 }
+
+function publishPhoto()
+{
+    if(photoUploaded == 0)
+    {
+       $("#status").html("Your photo is not uploaded yet.");
+       return false;
+    }
+    
+	form = new FormData();
+	form.append("sid", "<?php print $socialID; ?>");
+	form.append("uid", "<?php print $userID; ?>");
+	form.append("blob", canvas.toDataURL());
+	$("#status").html("Sending to server...");
+	$.ajax({
+		method: 'POST',
+		url: 'image_upload.php',
+		data: form,
+		enctype: 'multipart/form-data',
+		contentType: false,
+		processData: false,
+		cache: false,
+	   
+		success: function (resp) {
+		   // console.log(resp);
+		   // $("#status").html("Done!");
+           document.redirect.submit();
+		},
+		error: function (data) {
+			alert("error");
+			$("#status").html(data);
+		},
+		
+	});
+};
 
 </script>
 </body>
